@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Excel Quizzer</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Lora:wght@400;500;600;700&family=Nunito:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#f5f0e8;--bg2:#ede8df;--surface:#faf7f2;--surface2:#f0ebe0;--surface3:#e8e2d5;--border:#d8d0c0;--border2:#c8bfac;--accent:#2d7a4f;--accent-light:#e6f4ed;--accent-dim:#1a5c3a;--blue:#3b6ea5;--blue-light:#e8f0fa;--warn:#b5750d;--warn-light:#fdf3e0;--danger:#c0392b;--danger-light:#fdecea;--text:#2c2620;--text2:#6b5f52;--text3:#a89c8e;--shadow:0 2px 12px rgba(44,38,32,.08);--radius:14px;--radius-sm:9px}
+body{font-family:'Nunito',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:40px 20px 72px;background-image:radial-gradient(ellipse at 20% 10%,rgba(45,122,79,.05),transparent 60%),radial-gradient(ellipse at 80% 90%,rgba(59,110,165,.04),transparent 60%)}
+.app-header{text-align:center;margin-bottom:36px}
+.app-header h1{font-family:'Lora',serif;font-size:2rem;font-weight:700;margin-bottom:6px}
+.app-header h1 .accent{color:var(--accent)}
+.app-header p{color:var(--text2);font-size:.9rem}
+.container{width:100%;max-width:680px;display:flex;flex-direction:column;gap:14px}
+#screen-home{display:flex;flex-direction:column;gap:14px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px 22px;box-shadow:var(--shadow)}
+.section-label{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:var(--text3);margin-bottom:14px}
+.drop-zone{background:var(--surface);border:2px dashed var(--border2);border-radius:var(--radius);padding:28px 24px;text-align:center;cursor:pointer;position:relative;box-shadow:var(--shadow);transition:.2s}
+.drop-zone:hover,.drop-zone.drag{border-color:var(--accent);background:var(--accent-light)}
+.drop-zone input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.drop-icon{font-size:1.8rem;margin-bottom:8px;display:block}
+.drop-zone strong{color:var(--accent)}
+.drop-zone p{color:var(--text2);font-size:.88rem}
+.drop-zone p+p{margin-top:3px;font-size:.78rem;color:var(--text3)}
+.vault-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px}
+.vault-empty{text-align:center;padding:24px;color:var(--text3);font-size:.88rem;background:var(--bg2);border-radius:var(--radius-sm);border:1px dashed var(--border)}
+.vault-scroll{max-height:300px;overflow-y:auto;padding-right:4px;display:flex;flex-direction:column;gap:6px}
+.file-item{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);cursor:pointer;transition:.15s}
+.file-item:hover{border-color:var(--border2);background:var(--bg2)}
+.file-item.selected{border-color:var(--accent);background:var(--accent-light)}
+.file-item input{accent-color:var(--accent);width:16px;height:16px;flex-shrink:0}
+.file-info{flex:1;min-width:0}
+.file-name{font-size:.88rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.file-meta{font-size:.76rem;color:var(--text2);margin-top:2px}
+.badge{display:inline-block;background:var(--surface3);padding:1px 6px;border-radius:4px;font-size:.7rem;color:var(--text3);margin-left:4px}
+.file-del{background:none;border:none;cursor:pointer;color:var(--text3);font-size:.9rem;padding:5px 7px;border-radius:5px}
+.file-del:hover{color:var(--danger);background:var(--danger-light)}
+.sel-controls{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)}
+.sel-count-pill{font-size:.75rem;color:var(--text2);background:var(--surface2);border:1px solid var(--border);padding:3px 10px;border-radius:99px;margin-left:auto}
+.settings-grid{display:flex;flex-direction:column;gap:14px}
+.setting-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.setting-row label{font-size:.88rem;color:var(--text2);min-width:160px;font-weight:500}
+select,.txt{background:var(--surface2);border:1px solid var(--border2);color:var(--text);padding:10px 14px;border-radius:var(--radius-sm);font:inherit;font-size:.9rem;outline:none}
+select:focus,.txt:focus{border-color:var(--accent)}
+.toggle-row{display:flex;align-items:flex-start;gap:10px;cursor:pointer;padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm)}
+.toggle-row:hover{background:var(--bg2)}
+.toggle-row input{accent-color:var(--accent);width:16px;height:16px;margin-top:3px;flex-shrink:0}
+.toggle-text{font-size:.88rem;font-weight:600}
+.toggle-sub{font-size:.78rem;color:var(--text2);margin-top:2px}
+.mastery-tag{padding:2px 8px;border-radius:99px;font-size:.7rem;font-weight:700;background:var(--warn-light);color:var(--warn);border:1px solid #e8c070;margin-left:6px}
+.btn{padding:9px 20px;border-radius:var(--radius-sm);border:1px solid var(--border2);background:var(--surface2);color:var(--text);font:inherit;font-size:.88rem;font-weight:700;cursor:pointer;white-space:nowrap;transition:.15s}
+.btn:hover{background:var(--surface3)}
+.btn:active{transform:scale(.97)}
+.btn-primary{background:var(--accent);border-color:var(--accent);color:#fff;width:100%;padding:13px;font-size:.95rem;box-shadow:0 2px 8px rgba(45,122,79,.25)}
+.btn-primary:hover{background:var(--accent-dim)}
+.btn-primary:disabled{opacity:.35;cursor:not-allowed}
+.btn-ghost{background:transparent;color:var(--text2)}
+.btn-sm{padding:6px 13px;font-size:.78rem}
+.progress-wrap{background:var(--surface2);border-radius:99px;height:6px;overflow:hidden;border:1px solid var(--border)}
+.progress-fill{height:100%;background:linear-gradient(90deg,var(--accent),#4caf76);transition:width .4s}
+.progress-meta{display:flex;justify-content:space-between;margin-top:7px;font-size:.8rem;color:var(--text2)}
+.mastery-info{font-size:.78rem;color:var(--warn);margin-top:5px}
+.q-num{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--accent);margin-bottom:10px}
+.q-text{font-family:'Lora',serif;font-size:1.13rem;font-weight:500;line-height:1.65}
+.choices{display:flex;flex-direction:column;gap:8px}
+.choice-btn{background:var(--surface);border:1.5px solid var(--border);color:var(--text);padding:12px 16px;border-radius:var(--radius-sm);font:inherit;font-size:.92rem;text-align:left;cursor:pointer;display:flex;align-items:center;gap:12px;line-height:1.45;box-shadow:var(--shadow);transition:.15s}
+.ltr{font-family:'Lora',serif;font-size:.78rem;font-weight:700;color:var(--text3);width:22px;height:22px;flex-shrink:0;display:flex;align-items:center;justify-content:center;border:1.5px solid var(--border2);border-radius:50%}
+.choice-btn:hover:not(:disabled){border-color:var(--blue);background:var(--blue-light);transform:translateX(3px)}
+.choice-btn.correct,.choice-btn.reveal{border-color:var(--accent);background:var(--accent-light)}
+.choice-btn.correct .ltr,.choice-btn.reveal .ltr{border-color:var(--accent);color:var(--accent)}
+.choice-btn.wrong{border-color:var(--danger);background:var(--danger-light)}
+.choice-btn.wrong .ltr{border-color:var(--danger);color:var(--danger)}
+.feedback{padding:11px 16px;border-radius:var(--radius-sm);font-size:.88rem;font-weight:600;display:none;align-items:center;gap:8px}
+.feedback.correct{background:var(--accent-light);color:var(--accent);border:1px solid #a8d5b8}
+.feedback.wrong{background:var(--danger-light);color:var(--danger);border:1px solid #f0b8b2}
+.explanation{background:var(--blue-light);border-left:3px solid var(--blue);padding:11px 15px;border-radius:0 var(--radius-sm) var(--radius-sm) 0;font-size:.87rem;color:var(--text2);line-height:1.65;display:none}
+.results-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin:14px 0}
+.metric{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:16px;text-align:center}
+.metric .val{font-family:'Lora',serif;font-size:2rem;font-weight:700;color:var(--accent)}
+.metric .lbl{font-size:.75rem;color:var(--text2);margin-top:4px}
+.retry-list{display:flex;flex-direction:column;gap:6px;max-height:260px;overflow-y:auto}
+.retry-item{padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm)}
+.ri-q{font-size:.88rem;font-weight:500;margin-bottom:4px}
+.ri-r{font-size:.76rem;color:var(--warn);font-weight:600}
+.results-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+.nav-row{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.toast{position:fixed;bottom:24px;right:24px;background:var(--text);color:var(--bg);padding:10px 18px;border-radius:var(--radius-sm);font-size:.85rem;opacity:0;transform:translateY(10px);transition:.25s;pointer-events:none;z-index:999;max-width:320px}
+.toast.error{background:var(--danger);color:#fff}
+.toast.success{background:var(--accent);color:#fff}
+.toast.show{opacity:1;transform:none}
+.hidden{display:none!important}
+.flex-col{display:flex;flex-direction:column;gap:10px}
+.storage-indicator{display:flex;align-items:center;gap:5px;font-size:.72rem;color:var(--text3)}
+.storage-dot{width:6px;height:6px;border-radius:50%;background:var(--accent)}
+.result-emoji{font-size:2rem;margin-bottom:8px;display:block}
+</style>
+</head>
+<body>
+
+<div class="app-header">
+  <h1>📖 Excel <span class="accent">Quizzer</span></h1>
+  <p>Upload your test banks · review at your own pace</p>
+</div>
+
+<div class="container">
+
+  <!-- HOME -->
+  <div id="screen-home">
+    <div class="drop-zone" id="dropZone">
+      <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" multiple/>
+      <span class="drop-icon">📂</span>
+      <p><strong>Click or drag files here</strong></p>
+      <p>.xlsx · .xls · .csv — saved on this device</p>
+    </div>
+
+    <div class="card">
+      <div class="vault-header">
+        <div class="section-label" style="margin-bottom:0">File Vault</div>
+        <div class="storage-indicator"><div class="storage-dot"></div> Saved on this device</div>
+      </div>
+      <div class="vault-scroll" id="vaultScroll"></div>
+      <div id="selControls" class="sel-controls hidden">
+        <button class="btn btn-ghost btn-sm" onclick="selectAll()">Select all</button>
+        <button class="btn btn-ghost btn-sm" onclick="selectNone()">Deselect all</button>
+        <button class="btn btn-ghost btn-sm" onclick="clearVault()" style="color:var(--danger)">Clear vault</button>
+        <span class="sel-count-pill" id="selCount"></span>
+      </div>
+    </div>
+
+    <div class="card hidden" id="settingsPanel">
+      <div class="section-label">Session Settings</div>
+      <div class="settings-grid">
+        <div class="setting-row">
+          <label>Question limit</label>
+          <select id="qLimit"><option value="all">All questions</option><option value="10">10</option><option value="20">20</option><option value="50">50</option><option value="100">100</option></select>
+        </div>
+        <label class="toggle-row"><input type="checkbox" id="shuffleQ" checked/><div><div class="toggle-text">Shuffle questions</div><div class="toggle-sub">Randomize question order each session</div></div></label>
+        <label class="toggle-row"><input type="checkbox" id="shuffleA" checked/><div><div class="toggle-text">Shuffle answer choices</div><div class="toggle-sub">Randomize A, B, C, D options</div></div></label>
+        <label class="toggle-row"><input type="checkbox" id="masteryMode"/><div><div class="toggle-text">Mastery mode <span class="mastery-tag">🔁 loop</span></div><div class="toggle-sub">Missed questions re-appear until answered correctly</div></div></label>
+      </div>
+    </div>
+
+    <button class="btn btn-primary" id="startBtn" disabled onclick="startQuiz()">Start Quiz</button>
+  </div>
+
+  <!-- QUIZ -->
+  <div id="screen-quiz" class="hidden flex-col">
+    <div>
+      <div class="progress-wrap"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+      <div class="progress-meta"><span id="progressText"></span><span id="scoreText"></span></div>
+      <div class="mastery-info hidden" id="masteryLabel"></div>
+    </div>
+    <div class="card"><div class="q-num" id="questionNum"></div><div class="q-text" id="questionText"></div></div>
+    <div class="choices" id="choicesArea"></div>
+    <div class="feedback" id="feedback"></div>
+    <div class="explanation" id="explanationBox"></div>
+    <div class="nav-row">
+      <button class="btn btn-ghost" onclick="quitQuiz()">← Quit</button>
+      <button class="btn btn-primary hidden" id="nextBtn" style="width:auto" onclick="nextQ()">Next →</button>
+    </div>
+  </div>
+
+  <!-- RESULTS -->
+  <div id="screen-results" class="hidden">
+    <div class="card">
+      <div class="section-label">Session Complete</div>
+      <span class="result-emoji" id="resultEmoji"></span>
+      <div id="resultsTitle" style="font-family:'Lora',serif;font-size:1.25rem;font-weight:700;margin-bottom:4px"></div>
+      <div id="resultsSubtitle" style="font-size:.88rem;color:var(--text2)"></div>
+      <div class="results-grid">
+        <div class="metric"><div class="val" id="rScore"></div><div class="lbl">Correct</div></div>
+        <div class="metric"><div class="val" id="rTotal"></div><div class="lbl">Total</div></div>
+        <div class="metric"><div class="val" id="rPct"></div><div class="lbl">Accuracy</div></div>
+        <div class="metric hidden" id="rRetriesWrap"><div class="val" id="rRetries" style="color:var(--warn)"></div><div class="lbl">Retries</div></div>
+      </div>
+    </div>
+    <div class="card hidden" id="retrySection"><div class="section-label">Questions you retried</div><div class="retry-list" id="retryList"></div></div>
+    <div class="results-actions">
+      <button class="btn btn-primary" style="flex:1" onclick="restartSame()">Retry Same Set</button>
+      <button class="btn btn-ghost" onclick="goHome()">Back to Vault</button>
+    </div>
+  </div>
+
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const show = id => $(id).classList.remove('hidden');
+const hide = id => $(id).classList.add('hidden');
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+let toastTimer;
+function toast(msg, type = 'error') {
+  const t = $('toast'); t.textContent = msg; t.className = 'toast ' + type + ' show';
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 3500);
+}
+
+/* ─── Local storage (IndexedDB) ─── */
+let db;
+const openDB = () => new Promise((res, rej) => {
+  const req = indexedDB.open('excel-quizzer', 1);
+  req.onupgradeneeded = e => e.target.result.createObjectStore('files', { keyPath: 'fileName' });
+  req.onsuccess = e => { db = e.target.result; res(); };
+  req.onerror = rej;
+});
+const idb = (mode, fn) => new Promise((res, rej) => {
+  const tx = db.transaction('files', mode), r = fn(tx.objectStore('files'));
+  tx.oncomplete = () => res(r.result); tx.onerror = rej;
+});
+
+const vault = [];
+let quizPool = [], quizQ = [], curIdx = 0, score = 0, masteryQueue = [], retryCounts = {}, isMastery = false;
+
+async function initVault() {
+  await openDB();
+  const saved = await idb('readonly', s => s.getAll());
+  saved.sort((a, b) => (a.addedAt || 0) - (b.addedAt || 0));
+  vault.length = 0; vault.push(...saved);
+  renderVault();
+}
+
+const dropZone = $('dropZone');
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag'));
+dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('drag'); [...e.dataTransfer.files].forEach(readFile); });
+$('fileInput').addEventListener('change', e => { [...e.target.files].forEach(readFile); e.target.value = ''; });
+
+function readFile(file) {
+  const reader = new FileReader();
+  reader.onload = async e => {
+    try {
+      const wb = XLSX.read(e.target.result, { type: 'array' });
+      const sheets = [];
+      wb.SheetNames.forEach(n => {
+        const rows = XLSX.utils.sheet_to_json(wb.Sheets[n], { defval: '' });
+        if (rows.length) sheets.push({ name: n, rows });
+      });
+      if (!sheets.length) return toast('No data found in ' + file.name);
+      if (vault.find(v => v.fileName === file.name)) return toast(file.name + ' already in vault');
+      const entry = { fileName: file.name, sheets, selected: true, rowCount: sheets.reduce((a, s) => a + s.rows.length, 0), addedAt: Date.now() };
+      vault.push(entry);
+      await idb('readwrite', s => s.put(entry));
+      renderVault(); toast(file.name + ' added to vault', 'success');
+    } catch (err) { toast('Could not read: ' + file.name); }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function renderVault() {
+  const scroll = $('vaultScroll');
+  scroll.innerHTML = '';
+  if (!vault.length) {
+    scroll.innerHTML = '<div class="vault-empty">No files yet — upload above.</div>';
+    hide('selControls'); hide('settingsPanel'); $('startBtn').disabled = true; return;
+  }
+  vault.forEach((f, i) => {
+    const el = document.createElement('div');
+    el.className = 'file-item' + (f.selected ? ' selected' : '');
+    el.innerHTML = `
+      <input type="checkbox" ${f.selected ? 'checked' : ''} onchange="toggleVault(${i},this.checked)">
+      <div class="file-info"><div class="file-name">${esc(f.fileName)}</div>
+        <div class="file-meta">${f.rowCount} questions<span class="badge">${f.sheets.length} sheet${f.sheets.length > 1 ? 's' : ''}</span></div></div>
+      <button class="file-del" onclick="event.stopPropagation();removeVault(${i})" title="Remove">✕</button>`;
+    el.addEventListener('click', e => { if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'BUTTON') toggleVault(i, !vault[i].selected); });
+    scroll.appendChild(el);
+  });
+  show('selControls'); updateSelCount();
+  const any = vault.some(f => f.selected);
+  any ? show('settingsPanel') : hide('settingsPanel');
+  $('startBtn').disabled = !any;
+}
+function toggleVault(i, v) { vault[i].selected = v; idb('readwrite', s => s.put(vault[i])); renderVault(); }
+function selectAll() { vault.forEach(f => { f.selected = true; idb('readwrite', s => s.put(f)); }); renderVault(); }
+function selectNone() { vault.forEach(f => { f.selected = false; idb('readwrite', s => s.put(f)); }); renderVault(); }
+async function removeVault(i) { await idb('readwrite', s => s.delete(vault[i].fileName)); vault.splice(i, 1); renderVault(); }
+async function clearVault() {
+  if (!confirm('Clear all files from the vault?')) return;
+  await idb('readwrite', s => s.clear()); vault.length = 0; renderVault(); toast('Vault cleared', 'success');
+}
+function updateSelCount() { $('selCount').textContent = vault.filter(f => f.selected).length + ' of ' + vault.length + ' selected'; }
+
+/* ── Parse rows ── */
+const LETTERS = ['A', 'B', 'C', 'D', 'E'];
+function parseRows(rows) {
+  const q = [], h = rows.length ? Object.keys(rows[0]) : [];
+  const g = c => h.find(k => c.some(x => k.trim().toLowerCase() === x)) || null;
+  const qCol = g(['question', 'q', 'prompt']), ansCol = g(['answer', 'correct', 'key', 'ans']);
+  const expCol = g(['explanation', 'explain', 'note', 'notes', 'hint']);
+  const cols = LETTERS.map(L => g([L.toLowerCase(), 'choice ' + L.toLowerCase(), 'option ' + L.toLowerCase(), 'choice_' + L.toLowerCase()]));
+  if (!qCol || !ansCol) return [];
+  rows.forEach(r => {
+    if (!r[qCol] || !r[ansCol]) return;
+    const choices = [];
+    cols.forEach((c, i) => { if (c && r[c] !== '') choices.push({ letter: LETTERS[i], text: String(r[c]) }); });
+    q.push({ question: String(r[qCol]), choices, answer: String(r[ansCol]).trim().toUpperCase(), explanation: expCol ? String(r[expCol] || '') : '' });
+  });
+  return q;
+}
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  return a;
+}
+
+/* ── Quiz flow ── */
+function startQuiz() {
+  let pool = [];
+  vault.filter(f => f.selected).forEach(f => f.sheets.forEach(s => { pool = pool.concat(parseRows(s.rows)); }));
+  if (!pool.length) { toast('No valid questions found. Columns needed: Question, A, B, C, D, E, Answer, Explanation'); return; }
+  if ($('shuffleQ').checked) pool = shuffle(pool);
+  const lim = $('qLimit').value;
+  if (lim !== 'all') pool = pool.slice(0, Math.min(parseInt(lim), pool.length));
+  quizPool = [...pool]; quizQ = [...pool]; curIdx = 0; score = 0; retryCounts = {};
+  isMastery = $('masteryMode').checked;
+  if (isMastery) masteryQueue = [...quizQ];
+  hide('screen-home'); show('screen-quiz'); renderQ();
+}
+
+function renderQ() {
+  const list = isMastery ? masteryQueue : quizQ, q = list[curIdx], total = list.length;
+  $('progressFill').style.width = Math.round(curIdx / total * 100) + '%';
+  $('progressText').textContent = `Q${curIdx + 1} of ${total}`;
+  $('scoreText').textContent = `Score: ${score}`;
+  if (isMastery) { show('masteryLabel'); $('masteryLabel').textContent = `🔁 Mastery — ${masteryQueue.length} in queue`; } else hide('masteryLabel');
+  $('questionNum').textContent = 'Question ' + (curIdx + 1);
+  $('questionText').textContent = q.question;
+  let choices = [...q.choices];
+  if ($('shuffleA').checked) choices = shuffle(choices);
+  const area = $('choicesArea'); area.innerHTML = '';
+  choices.forEach((ch, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'choice-btn';
+    btn.innerHTML = `<span class="ltr">${LETTERS[i]}</span><span>${esc(ch.text)}</span>`;
+    btn.dataset.letter = ch.letter;
+    btn.addEventListener('click', () => handleAnswer(btn, ch.letter, q));
+    area.appendChild(btn);
+  });
+  $('feedback').style.display = 'none'; $('explanationBox').style.display = 'none'; hide('nextBtn');
+}
+
+function handleAnswer(clicked, chosen, q) {
+  document.querySelectorAll('.choice-btn').forEach(b => b.disabled = true);
+  const correct = chosen === q.answer;
+  if (correct) { score++; clicked.classList.add('correct'); }
+  else {
+    clicked.classList.add('wrong');
+    document.querySelectorAll('.choice-btn').forEach(b => { if (b.dataset.letter === q.answer) b.classList.add('reveal'); });
+    if (isMastery) { retryCounts[q.question] = (retryCounts[q.question] || 0) + 1; masteryQueue.push(q); }
+  }
+  $('scoreText').textContent = `Score: ${score}`;
+  const fb = $('feedback');
+  fb.className = 'feedback ' + (correct ? 'correct' : 'wrong');
+  fb.textContent = correct ? '✓ Correct!' : `✗ The correct answer is ${q.answer}`;
+  fb.style.display = 'flex';
+  if (q.explanation) { $('explanationBox').textContent = '💡 ' + q.explanation; $('explanationBox').style.display = 'block'; }
+  const isLast = curIdx + 1 >= (isMastery ? masteryQueue.length : quizQ.length);
+  $('nextBtn').textContent = isLast ? 'See Results →' : 'Next →';
+  show('nextBtn');
+}
+
+function nextQ() { curIdx++; curIdx < (isMastery ? masteryQueue.length : quizQ.length) ? renderQ() : showResults(); }
+function quitQuiz() { if (confirm('Quit and see results?')) showResults(); }
+
+function showResults() {
+  hide('screen-quiz'); show('screen-results');
+  const total = quizQ.length, pct = Math.round(score / total * 100);
+  $('rScore').textContent = score; $('rTotal').textContent = total; $('rPct').textContent = pct + '%';
+  const [emoji, title] = pct >= 90 ? ['🎉', 'Excellent work!'] : pct >= 75 ? ['👍', 'Good job!'] : pct >= 50 ? ['📖', 'Keep reviewing!'] : ['💪', 'More practice needed!'];
+  $('resultEmoji').textContent = emoji; $('resultsTitle').textContent = title;
+  $('resultsSubtitle').textContent = `You got ${score} out of ${total} correct (${pct}%).`;
+  const retries = Object.entries(retryCounts);
+  if (isMastery) {
+    show('rRetriesWrap'); $('rRetries').textContent = retries.reduce((a, r) => a + r[1], 0);
+    if (retries.length) {
+      show('retrySection'); const list = $('retryList'); list.innerHTML = '';
+      retries.sort((a, b) => b[1] - a[1]).forEach(([t, n]) => {
+        const el = document.createElement('div'); el.className = 'retry-item';
+        el.innerHTML = `<div class="ri-q">${esc(t)}</div><div class="ri-r">Retried ${n} time${n > 1 ? 's' : ''}</div>`;
+        list.appendChild(el);
+      });
+    } else hide('retrySection');
+  } else { hide('rRetriesWrap'); hide('retrySection'); }
+}
+
+function restartSame() {
+  hide('screen-results'); curIdx = 0; score = 0; retryCounts = {};
+  quizQ = shuffle([...quizPool]); if (isMastery) masteryQueue = [...quizQ];
+  show('screen-quiz'); renderQ();
+}
+function goHome() { hide('screen-results'); show('screen-home'); }
+
+/* ── Init ── */
+initVault();
+</script>
+</body>
+</html>
