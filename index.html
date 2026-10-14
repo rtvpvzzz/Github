@@ -66,6 +66,9 @@ select:focus,.txt:focus{border-color:var(--accent)}
 .mastery-info{font-size:.78rem;color:var(--warn);margin-top:5px}
 .q-num{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--accent);margin-bottom:10px}
 .q-text{font-family:'Lora',serif;font-size:1.13rem;font-weight:500;line-height:1.65}
+.q-stmt{display:flex;gap:10px;margin-top:8px}
+.q-mark{flex:0 0 2.2em;font-weight:700;color:var(--accent)}
+.q-opt .q-mark{color:var(--text3)}
 .choices{display:flex;flex-direction:column;gap:8px}
 .choice-btn{background:var(--surface);border:1.5px solid var(--border);color:var(--text);padding:12px 16px;border-radius:var(--radius-sm);font:inherit;font-size:.92rem;text-align:left;cursor:pointer;display:flex;align-items:center;gap:12px;line-height:1.45;box-shadow:var(--shadow);transition:.15s}
 .ltr{font-family:'Lora',serif;font-size:.78rem;font-weight:700;color:var(--text3);width:22px;height:22px;flex-shrink:0;display:flex;align-items:center;justify-content:center;border:1.5px solid var(--border2);border-radius:50%}
@@ -262,9 +265,9 @@ function renderVault() {
     const el = document.createElement('div');
     el.className = 'file-item' + (f.selected ? ' selected' : '');
     el.innerHTML = `
-      <input type="checkbox" ${f.selected ? 'checked' : ''} onchange="toggleVault(${i},this.checked)">
+      <input type="checkbox" f.selected?'checked':''onchange="toggleVault({i},this.checked)">
       <div class="file-info"><div class="file-name">${esc(f.fileName)}</div>
-        <div class="file-meta">${f.rowCount} questions<span class="badge">${f.sheets.length} sheet${f.sheets.length > 1 ? 's' : ''}</span></div></div>
+        <div class="file-meta">f.rowCountquestions<spanclass="badge">{f.sheets.length} sheet${f.sheets.length > 1 ? 's' : ''}</span></div></div>
       <button class="file-del" onclick="event.stopPropagation();removeVault(${i})" title="Remove">✕</button>`;
     el.addEventListener('click', e => { if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'BUTTON') toggleVault(i, !vault[i].selected); });
     scroll.appendChild(el);
@@ -307,6 +310,34 @@ function shuffle(arr) {
   return a;
 }
 
+/* ── Question text: one statement per row ── */
+const ROMAN = '(?:I|II|III|IV|V|VI|VII|VIII|IX|X)';
+function splitQuestion(text) {
+  const out = [];
+  String(text).split(/\r?\n+/).map(s => s.trim()).filter(Boolean).forEach(p => {
+    let seg = [p];
+    if (/(^|\s)I\.\s/.test(p) && /\sII\.\s/.test(p)) seg = p.split(new RegExp('\\s+(?=' + ROMAN + '\\.\\s)'));
+    seg = seg.flatMap(s => /(^|\s)a\.\s/.test(s) && /\sb\.\s/.test(s) ? s.split(/\s+(?=[a-e]\.\s+[A-Z0-9])/) : [s]);
+    out.push(...seg);
+  });
+  return out;
+}
+function renderQuestionText(el, text) {
+  el.innerHTML = '';
+  const lines = splitQuestion(text);
+  lines.forEach((line, i) => {
+    const m = line.match(new RegExp('^(' + ROMAN + '\\.|[a-e]\\.)\\s+([\\s\\S]*)$'));
+    const d = document.createElement('div');
+    if (m && lines.length > 1) {
+      d.className = 'q-stmt' + (/^[a-e]/.test(m[1]) ? ' q-opt' : '');
+      const mk = document.createElement('span'); mk.className = 'q-mark'; mk.textContent = m[1];
+      const tx = document.createElement('span'); tx.textContent = m[2];
+      d.append(mk, tx);
+    } else { d.textContent = line; if (i) d.style.marginTop = '8px'; }
+    el.appendChild(d);
+  });
+}
+
 /* ── Quiz flow ── */
 function startQuiz() {
   let pool = [];
@@ -324,26 +355,26 @@ function startQuiz() {
 function renderQ() {
   const list = isMastery ? masteryQueue : quizQ, q = list[curIdx], total = list.length;
   $('progressFill').style.width = Math.round(curIdx / total * 100) + '%';
-  $('progressText').textContent = `Q${curIdx + 1} of ${total}`;
+  ('progressText').textContent=`Q{curIdx + 1} of ${total}`;
   $('scoreText').textContent = `Score: ${score}`;
   if (isMastery) { show('masteryLabel'); $('masteryLabel').textContent = `🔁 Mastery — ${masteryQueue.length} in queue`; } else hide('masteryLabel');
   $('questionNum').textContent = 'Question ' + (curIdx + 1);
-  $('questionText').textContent = q.question;
+  renderQuestionText($('questionText'), q.question);
   let choices = [...q.choices];
   if ($('shuffleA').checked) choices = shuffle(choices);
   const area = $('choicesArea'); area.innerHTML = '';
   choices.forEach((ch, i) => {
     const btn = document.createElement('button');
     btn.className = 'choice-btn';
-    btn.innerHTML = `<span class="ltr">${LETTERS[i]}</span><span>${esc(ch.text)}</span>`;
+    btn.innerHTML = `<span class="ltr">LETTERS[i]</span><span>{esc(ch.text)}</span>`;
     btn.dataset.letter = ch.letter;
-    btn.addEventListener('click', () => handleAnswer(btn, ch.letter, q));
+    btn.addEventListener('click', () => handleAnswer(btn, ch.letter, q, choices));
     area.appendChild(btn);
   });
   $('feedback').style.display = 'none'; $('explanationBox').style.display = 'none'; hide('nextBtn');
 }
 
-function handleAnswer(clicked, chosen, q) {
+function handleAnswer(clicked, chosen, q, choices) {
   document.querySelectorAll('.choice-btn').forEach(b => b.disabled = true);
   const correct = chosen === q.answer;
   if (correct) { score++; clicked.classList.add('correct'); }
@@ -355,7 +386,7 @@ function handleAnswer(clicked, chosen, q) {
   $('scoreText').textContent = `Score: ${score}`;
   const fb = $('feedback');
   fb.className = 'feedback ' + (correct ? 'correct' : 'wrong');
-  fb.textContent = correct ? '✓ Correct!' : `✗ The correct answer is ${q.answer}`;
+  fb.textContent = correct ? '✓ Correct!' : `✗ The correct answer is ${LETTERS[choices.findIndex(c => c.letter === q.answer)]}`;
   fb.style.display = 'flex';
   if (q.explanation) { $('explanationBox').textContent = '💡 ' + q.explanation; $('explanationBox').style.display = 'block'; }
   const isLast = curIdx + 1 >= (isMastery ? masteryQueue.length : quizQ.length);
@@ -372,7 +403,7 @@ function showResults() {
   $('rScore').textContent = score; $('rTotal').textContent = total; $('rPct').textContent = pct + '%';
   const [emoji, title] = pct >= 90 ? ['🎉', 'Excellent work!'] : pct >= 75 ? ['👍', 'Good job!'] : pct >= 50 ? ['📖', 'Keep reviewing!'] : ['💪', 'More practice needed!'];
   $('resultEmoji').textContent = emoji; $('resultsTitle').textContent = title;
-  $('resultsSubtitle').textContent = `You got ${score} out of ${total} correct (${pct}%).`;
+  $('resultsSubtitle').textContent = `You got ${score} out of totalcorrect({pct}%).`;
   const retries = Object.entries(retryCounts);
   if (isMastery) {
     show('rRetriesWrap'); $('rRetries').textContent = retries.reduce((a, r) => a + r[1], 0);
@@ -380,7 +411,7 @@ function showResults() {
       show('retrySection'); const list = $('retryList'); list.innerHTML = '';
       retries.sort((a, b) => b[1] - a[1]).forEach(([t, n]) => {
         const el = document.createElement('div'); el.className = 'retry-item';
-        el.innerHTML = `<div class="ri-q">${esc(t)}</div><div class="ri-r">Retried ${n} time${n > 1 ? 's' : ''}</div>`;
+        el.innerHTML = `<div class="ri-q">${esc(t)}</div><div class="ri-r">Retried ntime{n > 1 ? 's' : ''}</div>`;
         list.appendChild(el);
       });
     } else hide('retrySection');
@@ -399,3 +430,4 @@ initVault();
 </script>
 </body>
 </html>
+
