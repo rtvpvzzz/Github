@@ -104,12 +104,15 @@ select:focus,.txt:focus{border-color:var(--accent)}
 </head>
 <body>
 
+
 <div class="app-header">
   <h1>📖 Excel <span class="accent">Quizzer</span></h1>
   <p>Upload your test banks · review at your own pace</p>
 </div>
 
+
 <div class="container">
+
 
   <!-- HOME -->
   <div id="screen-home">
@@ -119,6 +122,7 @@ select:focus,.txt:focus{border-color:var(--accent)}
       <p><strong>Click or drag files here</strong></p>
       <p>.xlsx · .xls · .csv — saved on this device</p>
     </div>
+
 
     <div class="card">
       <div class="vault-header">
@@ -134,6 +138,7 @@ select:focus,.txt:focus{border-color:var(--accent)}
       </div>
     </div>
 
+
     <div class="card hidden" id="settingsPanel">
       <div class="section-label">Session Settings</div>
       <div class="settings-grid">
@@ -147,8 +152,10 @@ select:focus,.txt:focus{border-color:var(--accent)}
       </div>
     </div>
 
+
     <button class="btn btn-primary" id="startBtn" disabled onclick="startQuiz()">Start Quiz</button>
   </div>
+
 
   <!-- QUIZ -->
   <div id="screen-quiz" class="hidden flex-col">
@@ -166,6 +173,7 @@ select:focus,.txt:focus{border-color:var(--accent)}
       <button class="btn btn-primary hidden" id="nextBtn" style="width:auto" onclick="nextQ()">Next →</button>
     </div>
   </div>
+
 
   <!-- RESULTS -->
   <div id="screen-results" class="hidden">
@@ -188,8 +196,10 @@ select:focus,.txt:focus{border-color:var(--accent)}
     </div>
   </div>
 
+
 </div>
 <div class="toast" id="toast"></div>
+
 
 <script>
 const $ = id => document.getElementById(id);
@@ -197,11 +207,13 @@ const show = id => $(id).classList.remove('hidden');
 const hide = id => $(id).classList.add('hidden');
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
+
 let toastTimer;
 function toast(msg, type = 'error') {
   const t = $('toast'); t.textContent = msg; t.className = 'toast ' + type + ' show';
   clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 3500);
 }
+
 
 /* ─── Local storage (IndexedDB) ─── */
 let db;
@@ -216,8 +228,10 @@ const idb = (mode, fn) => new Promise((res, rej) => {
   tx.oncomplete = () => res(r.result); tx.onerror = rej;
 });
 
+
 const vault = [];
 let quizPool = [], quizQ = [], curIdx = 0, score = 0, masteryQueue = [], retryCounts = {}, isMastery = false;
+
 
 async function initVault() {
   await openDB();
@@ -227,11 +241,13 @@ async function initVault() {
   renderVault();
 }
 
+
 const dropZone = $('dropZone');
 dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag'); });
 dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag'));
 dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('drag'); [...e.dataTransfer.files].forEach(readFile); });
 $('fileInput').addEventListener('change', e => { [...e.target.files].forEach(readFile); e.target.value = ''; });
+
 
 function readFile(file) {
   const reader = new FileReader();
@@ -254,6 +270,7 @@ function readFile(file) {
   reader.readAsArrayBuffer(file);
 }
 
+
 function renderVault() {
   const scroll = $('vaultScroll');
   scroll.innerHTML = '';
@@ -265,9 +282,9 @@ function renderVault() {
     const el = document.createElement('div');
     el.className = 'file-item' + (f.selected ? ' selected' : '');
     el.innerHTML = `
-      <input type="checkbox" f.selected?'checked':''onchange="toggleVault({i},this.checked)">
+      <input type="checkbox" ${f.selected ? 'checked' : ''} onchange="toggleVault(${i},this.checked)">
       <div class="file-info"><div class="file-name">${esc(f.fileName)}</div>
-        <div class="file-meta">f.rowCountquestions<spanclass="badge">{f.sheets.length} sheet${f.sheets.length > 1 ? 's' : ''}</span></div></div>
+        <div class="file-meta">${f.rowCount} questions<span class="badge">${f.sheets.length} sheet${f.sheets.length > 1 ? 's' : ''}</span></div></div>
       <button class="file-del" onclick="event.stopPropagation();removeVault(${i})" title="Remove">✕</button>`;
     el.addEventListener('click', e => { if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'BUTTON') toggleVault(i, !vault[i].selected); });
     scroll.appendChild(el);
@@ -286,6 +303,7 @@ async function clearVault() {
   await idb('readwrite', s => s.clear()); vault.length = 0; renderVault(); toast('Vault cleared', 'success');
 }
 function updateSelCount() { $('selCount').textContent = vault.filter(f => f.selected).length + ' of ' + vault.length + ' selected'; }
+
 
 /* ── Parse rows ── */
 const LETTERS = ['A', 'B', 'C', 'D', 'E'];
@@ -309,6 +327,7 @@ function shuffle(arr) {
   for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
   return a;
 }
+
 
 /* ── Question text: one statement per row ── */
 const ROMAN = '(?:I|II|III|IV|V|VI|VII|VIII|IX|X)';
@@ -338,6 +357,7 @@ function renderQuestionText(el, text) {
   });
 }
 
+
 /* ── Quiz flow ── */
 function startQuiz() {
   let pool = [];
@@ -352,10 +372,11 @@ function startQuiz() {
   hide('screen-home'); show('screen-quiz'); renderQ();
 }
 
+
 function renderQ() {
   const list = isMastery ? masteryQueue : quizQ, q = list[curIdx], total = list.length;
   $('progressFill').style.width = Math.round(curIdx / total * 100) + '%';
-  ('progressText').textContent=`Q{curIdx + 1} of ${total}`;
+  $('progressText').textContent = `Q${curIdx + 1} of ${total}`;
   $('scoreText').textContent = `Score: ${score}`;
   if (isMastery) { show('masteryLabel'); $('masteryLabel').textContent = `🔁 Mastery — ${masteryQueue.length} in queue`; } else hide('masteryLabel');
   $('questionNum').textContent = 'Question ' + (curIdx + 1);
@@ -366,13 +387,16 @@ function renderQ() {
   choices.forEach((ch, i) => {
     const btn = document.createElement('button');
     btn.className = 'choice-btn';
-    btn.innerHTML = `<span class="ltr">LETTERS[i]</span><span>{esc(ch.text)}</span>`;
+    const ltr = document.createElement('span'); ltr.className = 'ltr'; ltr.textContent = LETTERS[i];
+    const txt = document.createElement('span'); txt.textContent = ch.text;
+    btn.append(ltr, txt);
     btn.dataset.letter = ch.letter;
     btn.addEventListener('click', () => handleAnswer(btn, ch.letter, q, choices));
     area.appendChild(btn);
   });
   $('feedback').style.display = 'none'; $('explanationBox').style.display = 'none'; hide('nextBtn');
 }
+
 
 function handleAnswer(clicked, chosen, q, choices) {
   document.querySelectorAll('.choice-btn').forEach(b => b.disabled = true);
@@ -394,8 +418,10 @@ function handleAnswer(clicked, chosen, q, choices) {
   show('nextBtn');
 }
 
+
 function nextQ() { curIdx++; curIdx < (isMastery ? masteryQueue.length : quizQ.length) ? renderQ() : showResults(); }
 function quitQuiz() { if (confirm('Quit and see results?')) showResults(); }
+
 
 function showResults() {
   hide('screen-quiz'); show('screen-results');
@@ -403,7 +429,7 @@ function showResults() {
   $('rScore').textContent = score; $('rTotal').textContent = total; $('rPct').textContent = pct + '%';
   const [emoji, title] = pct >= 90 ? ['🎉', 'Excellent work!'] : pct >= 75 ? ['👍', 'Good job!'] : pct >= 50 ? ['📖', 'Keep reviewing!'] : ['💪', 'More practice needed!'];
   $('resultEmoji').textContent = emoji; $('resultsTitle').textContent = title;
-  $('resultsSubtitle').textContent = `You got ${score} out of totalcorrect({pct}%).`;
+  $('resultsSubtitle').textContent = `You got ${score} out of ${total} correct (${pct}%).`;
   const retries = Object.entries(retryCounts);
   if (isMastery) {
     show('rRetriesWrap'); $('rRetries').textContent = retries.reduce((a, r) => a + r[1], 0);
@@ -411,12 +437,13 @@ function showResults() {
       show('retrySection'); const list = $('retryList'); list.innerHTML = '';
       retries.sort((a, b) => b[1] - a[1]).forEach(([t, n]) => {
         const el = document.createElement('div'); el.className = 'retry-item';
-        el.innerHTML = `<div class="ri-q">${esc(t)}</div><div class="ri-r">Retried ntime{n > 1 ? 's' : ''}</div>`;
+        el.innerHTML = `<div class="ri-q">${esc(t)}</div><div class="ri-r">Retried ${n} time${n > 1 ? 's' : ''}</div>`;
         list.appendChild(el);
       });
     } else hide('retrySection');
   } else { hide('rRetriesWrap'); hide('retrySection'); }
 }
+
 
 function restartSame() {
   hide('screen-results'); curIdx = 0; score = 0; retryCounts = {};
@@ -425,9 +452,11 @@ function restartSame() {
 }
 function goHome() { hide('screen-results'); show('screen-home'); }
 
+
 /* ── Init ── */
 initVault();
 </script>
 </body>
 </html>
+
 
