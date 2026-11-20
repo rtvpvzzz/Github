@@ -262,7 +262,7 @@ async function renderResume() {
   if (!s || !s.quizQ || !s.quizQ.length) return hide('resumeCard');
   const list = s.isMastery ? s.masteryQueue : s.quizQ;
   const when = new Date(s.savedAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
-  $('resumeSub').textContent = `Question ${s.curIdx + 1} of ${list.length} · Score s.score{s.isMastery ? ' · Mastery mode' : ''} · saved ${when}`;
+  $('resumeSub').textContent = `Question ${s.curIdx + 1} of ${list.length} · Score ${s.score}${s.isMastery ? ' · Mastery mode' : ''} · saved ${when}`;
   show('resumeCard');
 }
 async function resumeQuiz() {
@@ -328,9 +328,9 @@ function renderVault() {
     const el = document.createElement('div');
     el.className = 'file-item' + (f.selected ? ' selected' : '');
     el.innerHTML = `
-      <input type="checkbox" f.selected?'checked':''onchange="toggleVault({i},this.checked)">
+      <input type="checkbox" ${f.selected ? 'checked' : ''} onchange="toggleVault(${i},this.checked)">
       <div class="file-info"><div class="file-name">${esc(f.fileName)}</div>
-        <div class="file-meta">f.rowCountquestions<spanclass="badge">{f.sheets.length} sheet${f.sheets.length > 1 ? 's' : ''}</span></div></div>
+        <div class="file-meta">${f.rowCount} questions<span class="badge">${f.sheets.length} sheet${f.sheets.length > 1 ? 's' : ''}</span></div></div>
       <button class="file-del" onclick="event.stopPropagation();removeVault(${i})" title="Remove">✕</button>`;
     el.addEventListener('click', e => { if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'BUTTON') toggleVault(i, !vault[i].selected); });
     scroll.appendChild(el);
@@ -420,7 +420,7 @@ async function startQuiz() {
 function renderQ(restore) {
   const list = isMastery ? masteryQueue : quizQ, q = list[curIdx], total = list.length;
   $('progressFill').style.width = Math.round(curIdx / total * 100) + '%';
-  ('progressText').textContent=`Q{curIdx + 1} of ${total}`;
+  $('progressText').textContent = `Q${curIdx + 1} of ${total}`;
   $('scoreText').textContent = `Score: ${score}`;
   if (isMastery) { show('masteryLabel'); $('masteryLabel').textContent = `🔁 Mastery — ${masteryQueue.length} in queue`; } else hide('masteryLabel');
   $('questionNum').textContent = 'Question ' + (curIdx + 1);
@@ -487,7 +487,7 @@ function showResults() {
   $('rScore').textContent = score; $('rTotal').textContent = total; $('rPct').textContent = pct + '%';
   const [emoji, title] = pct >= 90 ? ['🎉', 'Excellent work!'] : pct >= 75 ? ['👍', 'Good job!'] : pct >= 50 ? ['📖', 'Keep reviewing!'] : ['💪', 'More practice needed!'];
   $('resultEmoji').textContent = emoji; $('resultsTitle').textContent = title;
-  $('resultsSubtitle').textContent = `You got ${score} out of totalcorrect({pct}%).`;
+  $('resultsSubtitle').textContent = `You got ${score} out of ${total} correct (${pct}%).`;
   const retries = Object.entries(retryCounts);
   if (isMastery) {
     show('rRetriesWrap'); $('rRetries').textContent = retries.reduce((a, r) => a + r[1], 0);
@@ -495,7 +495,7 @@ function showResults() {
       show('retrySection'); const list = $('retryList'); list.innerHTML = '';
       retries.sort((a, b) => b[1] - a[1]).forEach(([t, n]) => {
         const el = document.createElement('div'); el.className = 'retry-item';
-        el.innerHTML = `<div class="ri-q">${esc(t)}</div><div class="ri-r">Retried ntime{n > 1 ? 's' : ''}</div>`;
+        el.innerHTML = `<div class="ri-q">${esc(t)}</div><div class="ri-r">Retried ${n} time${n > 1 ? 's' : ''}</div>`;
         list.appendChild(el);
       });
     } else hide('retrySection');
@@ -509,11 +509,19 @@ function restartSame() {
 }
 function goHome() { hide('screen-results'); show('screen-home'); renderResume(); }
 
-/* ── Keyboard shortcuts: 1-5 pick the choice in that position ── */
+/* ── Keyboard shortcuts: 1-5 pick a choice; Enter or → goes to Next ── */
 document.addEventListener('keydown', e => {
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   if ($('screen-quiz').classList.contains('hidden')) return;
   if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+  if (e.key === 'Enter' || e.key === 'ArrowRight') {
+    const next = $('nextBtn');
+    if (!next.classList.contains('hidden')) {
+      e.preventDefault();
+      if (!e.repeat) next.click();
+    }
+    return;
+  }
   const n = parseInt(e.key, 10);
   if (n >= 1 && n <= 5) {
     const btn = document.querySelectorAll('.choice-btn')[n - 1];
