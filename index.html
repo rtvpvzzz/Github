@@ -18,6 +18,10 @@ body{font-family:'Nunito',sans-serif;background:var(--bg);color:var(--text);min-
 .container{width:100%;max-width:680px;display:flex;flex-direction:column;gap:14px}
 #screen-home{display:flex;flex-direction:column;gap:14px}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px 22px;box-shadow:var(--shadow)}
+.resume-card{border-color:var(--accent);background:var(--accent-light)}
+.resume-title{font-family:'Lora',serif;font-size:1.05rem;font-weight:700;margin-bottom:4px}
+.resume-sub{font-size:.84rem;color:var(--text2);margin-bottom:14px}
+.resume-actions{display:flex;gap:8px;flex-wrap:wrap}
 .section-label{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:var(--text3);margin-bottom:14px}
 .drop-zone{background:var(--surface);border:2px dashed var(--border2);border-radius:var(--radius);padding:28px 24px;text-align:center;cursor:pointer;position:relative;box-shadow:var(--shadow);transition:.2s}
 .drop-zone:hover,.drop-zone.drag{border-color:var(--accent);background:var(--accent-light)}
@@ -90,7 +94,8 @@ select:focus,.txt:focus{border-color:var(--accent)}
 .ri-q{font-size:.88rem;font-weight:500;margin-bottom:4px}
 .ri-r{font-size:.76rem;color:var(--warn);font-weight:600}
 .results-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
-.nav-row{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.nav-row{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.nav-left{display:flex;gap:6px;align-items:center}
 .toast{position:fixed;bottom:24px;right:24px;background:var(--text);color:var(--bg);padding:10px 18px;border-radius:var(--radius-sm);font-size:.85rem;opacity:0;transform:translateY(10px);transition:.25s;pointer-events:none;z-index:999;max-width:320px}
 .toast.error{background:var(--danger);color:#fff}
 .toast.success{background:var(--accent);color:#fff}
@@ -113,6 +118,15 @@ select:focus,.txt:focus{border-color:var(--accent)}
 
   <!-- HOME -->
   <div id="screen-home">
+    <div class="card resume-card hidden" id="resumeCard">
+      <div class="resume-title">⏯ Continue your quiz</div>
+      <div class="resume-sub" id="resumeSub"></div>
+      <div class="resume-actions">
+        <button class="btn btn-primary" style="width:auto;flex:1" onclick="resumeQuiz()">Resume</button>
+        <button class="btn btn-ghost" onclick="discardSession()">Discard</button>
+      </div>
+    </div>
+
     <div class="drop-zone" id="dropZone">
       <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" multiple/>
       <span class="drop-icon">📂</span>
@@ -162,7 +176,10 @@ select:focus,.txt:focus{border-color:var(--accent)}
     <div class="feedback" id="feedback"></div>
     <div class="explanation" id="explanationBox"></div>
     <div class="nav-row">
-      <button class="btn btn-ghost" onclick="quitQuiz()">← Quit</button>
+      <div class="nav-left">
+        <button class="btn btn-ghost" onclick="saveAndExit()">← Save &amp; exit</button>
+        <button class="btn btn-ghost" onclick="quitQuiz()">End quiz</button>
+      </div>
       <button class="btn btn-primary hidden" id="nextBtn" style="width:auto" onclick="nextQ()">Next →</button>
     </div>
   </div>
@@ -203,28 +220,74 @@ function toast(msg, type = 'error') {
   clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 3500);
 }
 
-/* ─── Local storage (IndexedDB) ─── */
+/* ─── Local storage (IndexedDB): files + saved session ─── */
 let db;
 const openDB = () => new Promise((res, rej) => {
-  const req = indexedDB.open('excel-quizzer', 1);
-  req.onupgradeneeded = e => e.target.result.createObjectStore('files', { keyPath: 'fileName' });
+  const req = indexedDB.open('excel-quizzer', 2);
+  req.onupgradeneeded = e => {
+    const d = e.target.result;
+    if (!d.objectStoreNames.contains('files')) d.createObjectStore('files', { keyPath: 'fileName' });
+    if (!d.objectStoreNames.contains('session')) d.createObjectStore('session', { keyPath: 'id' });
+  };
   req.onsuccess = e => { db = e.target.result; res(); };
   req.onerror = rej;
 });
-const idb = (mode, fn) => new Promise((res, rej) => {
-  const tx = db.transaction('files', mode), r = fn(tx.objectStore('files'));
+const idb = (mode, fn, store = 'files') => new Promise((res, rej) => {
+  const tx = db.transaction(store, mode), r = fn(tx.objectStore(store));
   tx.oncomplete = () => res(r.result); tx.onerror = rej;
 });
 
 const vault = [];
 let quizPool = [], quizQ = [], curIdx = 0, score = 0, masteryQueue = [], retryCounts = {}, isMastery = false;
+let curOrder = [], curChosen = null;   // letters in displayed order, and the letter picked (if answered)
+
+/* ─── Session save / resume ─── */
+async function saveSession() {
+  try {
+    await idb('readwrite', s => s.put({
+      id: 'current', quizPool, quizQ, curIdx, score, masteryQueue, retryCounts,
+      isMastery, curOrder, curChosen, savedAt: Date.now()
+    }), 'session');
+  } catch (e) { console.error('Could not save session', e); }
+}
+async function clearSession() {
+  try { await idb('readwrite', s => s.delete('current'), 'session'); } catch (e) {}
+  hide('resumeCard');
+}
+async function loadSession() {
+  try { return await idb('readonly', s => s.get('current'), 'session'); } catch (e) { return null; }
+}
+async function renderResume() {
+  const s = await loadSession();
+  if (!s || !s.quizQ || !s.quizQ.length) return hide('resumeCard');
+  const list = s.isMastery ? s.masteryQueue : s.quizQ;
+  const when = new Date(s.savedAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+  $('resumeSub').textContent = `Question ${s.curIdx + 1} of ${list.length} · Score s.score{s.isMastery ? ' · Mastery mode' : ''} · saved ${when}`;
+  show('resumeCard');
+}
+async function resumeQuiz() {
+  const s = await loadSession();
+  if (!s) { hide('resumeCard'); return toast('No saved quiz found'); }
+  ({ quizPool, quizQ, curIdx, score, masteryQueue, retryCounts, isMastery } = s);
+  hide('screen-home'); show('screen-quiz');
+  renderQ({ order: s.curOrder, chosen: s.curChosen });
+}
+async function discardSession() {
+  if (!confirm('Discard your saved quiz? Progress will be lost.')) return;
+  await clearSession(); toast('Saved quiz discarded', 'success');
+}
+async function saveAndExit() {
+  await saveSession();
+  hide('screen-quiz'); show('screen-home'); renderResume();
+  toast('Progress saved. You can continue anytime.', 'success');
+}
 
 async function initVault() {
   await openDB();
   const saved = await idb('readonly', s => s.getAll());
   saved.sort((a, b) => (a.addedAt || 0) - (b.addedAt || 0));
   vault.length = 0; vault.push(...saved);
-  renderVault();
+  renderVault(); renderResume();
 }
 
 const dropZone = $('dropZone');
@@ -265,9 +328,9 @@ function renderVault() {
     const el = document.createElement('div');
     el.className = 'file-item' + (f.selected ? ' selected' : '');
     el.innerHTML = `
-      <input type="checkbox" ${f.selected ? 'checked' : ''} onchange="toggleVault(${i},this.checked)">
+      <input type="checkbox" f.selected?'checked':''onchange="toggleVault({i},this.checked)">
       <div class="file-info"><div class="file-name">${esc(f.fileName)}</div>
-        <div class="file-meta">${f.rowCount} questions<span class="badge">${f.sheets.length} sheet${f.sheets.length > 1 ? 's' : ''}</span></div></div>
+        <div class="file-meta">f.rowCountquestions<spanclass="badge">{f.sheets.length} sheet${f.sheets.length > 1 ? 's' : ''}</span></div></div>
       <button class="file-del" onclick="event.stopPropagation();removeVault(${i})" title="Remove">✕</button>`;
     el.addEventListener('click', e => { if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'BUTTON') toggleVault(i, !vault[i].selected); });
     scroll.appendChild(el);
@@ -339,7 +402,8 @@ function renderQuestionText(el, text) {
 }
 
 /* ── Quiz flow ── */
-function startQuiz() {
+async function startQuiz() {
+  if (await loadSession() && !confirm('You have a saved quiz in progress. Starting a new one will replace it. Continue?')) return;
   let pool = [];
   vault.filter(f => f.selected).forEach(f => f.sheets.forEach(s => { pool = pool.concat(parseRows(s.rows)); }));
   if (!pool.length) { toast('No valid questions found. Columns needed: Question, A, B, C, D, E, Answer, Explanation'); return; }
@@ -348,20 +412,27 @@ function startQuiz() {
   if (lim !== 'all') pool = pool.slice(0, Math.min(parseInt(lim), pool.length));
   quizPool = [...pool]; quizQ = [...pool]; curIdx = 0; score = 0; retryCounts = {};
   isMastery = $('masteryMode').checked;
-  if (isMastery) masteryQueue = [...quizQ];
-  hide('screen-home'); show('screen-quiz'); renderQ();
+  masteryQueue = isMastery ? [...quizQ] : [];
+  hide('screen-home'); hide('resumeCard'); show('screen-quiz'); renderQ();
 }
 
-function renderQ() {
+/* restore = { order, chosen } when resuming a saved question */
+function renderQ(restore) {
   const list = isMastery ? masteryQueue : quizQ, q = list[curIdx], total = list.length;
   $('progressFill').style.width = Math.round(curIdx / total * 100) + '%';
-  $('progressText').textContent = `Q${curIdx + 1} of ${total}`;
+  ('progressText').textContent=`Q{curIdx + 1} of ${total}`;
   $('scoreText').textContent = `Score: ${score}`;
   if (isMastery) { show('masteryLabel'); $('masteryLabel').textContent = `🔁 Mastery — ${masteryQueue.length} in queue`; } else hide('masteryLabel');
   $('questionNum').textContent = 'Question ' + (curIdx + 1);
   renderQuestionText($('questionText'), q.question);
-  let choices = [...q.choices];
-  if ($('shuffleA').checked) choices = shuffle(choices);
+  let choices;
+  if (restore && restore.order && restore.order.length) {
+    choices = restore.order.map(L => q.choices.find(c => c.letter === L)).filter(Boolean);
+  } else {
+    choices = [...q.choices];
+    if ($('shuffleA').checked) choices = shuffle(choices);
+  }
+  curOrder = choices.map(c => c.letter); curChosen = null;
   const area = $('choicesArea'); area.innerHTML = '';
   choices.forEach((ch, i) => {
     const btn = document.createElement('button');
@@ -370,22 +441,32 @@ function renderQ() {
     const txt = document.createElement('span'); txt.textContent = ch.text;
     btn.append(ltr, txt);
     btn.dataset.letter = ch.letter;
-    btn.addEventListener('click', () => handleAnswer(btn, ch.letter, q, choices));
+    btn.addEventListener('click', () => handleAnswer(ch.letter, q, choices));
     area.appendChild(btn);
   });
   $('feedback').style.display = 'none'; $('explanationBox').style.display = 'none'; hide('nextBtn');
+  if (restore && restore.chosen) { curChosen = restore.chosen; showAnswerUI(restore.chosen, q, choices); }
+  else saveSession();
 }
 
-function handleAnswer(clicked, chosen, q, choices) {
-  document.querySelectorAll('.choice-btn').forEach(b => b.disabled = true);
+function handleAnswer(chosen, q, choices) {
+  curChosen = chosen;
+  if (chosen === q.answer) score++;
+  else if (isMastery) { retryCounts[q.question] = (retryCounts[q.question] || 0) + 1; masteryQueue.push(q); }
+  showAnswerUI(chosen, q, choices);
+  saveSession();
+}
+
+function showAnswerUI(chosen, q, choices) {
+  const btns = document.querySelectorAll('.choice-btn');
+  btns.forEach(b => b.disabled = true);
   const correct = chosen === q.answer;
-  if (correct) { score++; clicked.classList.add('correct'); }
-  else {
-    clicked.classList.add('wrong');
-    document.querySelectorAll('.choice-btn').forEach(b => { if (b.dataset.letter === q.answer) b.classList.add('reveal'); });
-    if (isMastery) { retryCounts[q.question] = (retryCounts[q.question] || 0) + 1; masteryQueue.push(q); }
-  }
+  btns.forEach(b => {
+    if (b.dataset.letter === chosen) b.classList.add(correct ? 'correct' : 'wrong');
+    else if (!correct && b.dataset.letter === q.answer) b.classList.add('reveal');
+  });
   $('scoreText').textContent = `Score: ${score}`;
+  if (isMastery) $('masteryLabel').textContent = `🔁 Mastery — ${masteryQueue.length} in queue`;
   const fb = $('feedback');
   fb.className = 'feedback ' + (correct ? 'correct' : 'wrong');
   fb.textContent = correct ? '✓ Correct!' : `✗ The correct answer is ${LETTERS[choices.findIndex(c => c.letter === q.answer)]}`;
@@ -397,15 +478,16 @@ function handleAnswer(clicked, chosen, q, choices) {
 }
 
 function nextQ() { curIdx++; curIdx < (isMastery ? masteryQueue.length : quizQ.length) ? renderQ() : showResults(); }
-function quitQuiz() { if (confirm('Quit and see results?')) showResults(); }
+function quitQuiz() { if (confirm('End the quiz and see results? Your saved progress will be cleared.')) showResults(); }
 
 function showResults() {
+  clearSession();
   hide('screen-quiz'); show('screen-results');
   const total = quizQ.length, pct = Math.round(score / total * 100);
   $('rScore').textContent = score; $('rTotal').textContent = total; $('rPct').textContent = pct + '%';
   const [emoji, title] = pct >= 90 ? ['🎉', 'Excellent work!'] : pct >= 75 ? ['👍', 'Good job!'] : pct >= 50 ? ['📖', 'Keep reviewing!'] : ['💪', 'More practice needed!'];
   $('resultEmoji').textContent = emoji; $('resultsTitle').textContent = title;
-  $('resultsSubtitle').textContent = `You got ${score} out of ${total} correct (${pct}%).`;
+  $('resultsSubtitle').textContent = `You got ${score} out of totalcorrect({pct}%).`;
   const retries = Object.entries(retryCounts);
   if (isMastery) {
     show('rRetriesWrap'); $('rRetries').textContent = retries.reduce((a, r) => a + r[1], 0);
@@ -413,7 +495,7 @@ function showResults() {
       show('retrySection'); const list = $('retryList'); list.innerHTML = '';
       retries.sort((a, b) => b[1] - a[1]).forEach(([t, n]) => {
         const el = document.createElement('div'); el.className = 'retry-item';
-        el.innerHTML = `<div class="ri-q">${esc(t)}</div><div class="ri-r">Retried ${n} time${n > 1 ? 's' : ''}</div>`;
+        el.innerHTML = `<div class="ri-q">${esc(t)}</div><div class="ri-r">Retried ntime{n > 1 ? 's' : ''}</div>`;
         list.appendChild(el);
       });
     } else hide('retrySection');
@@ -422,13 +504,26 @@ function showResults() {
 
 function restartSame() {
   hide('screen-results'); curIdx = 0; score = 0; retryCounts = {};
-  quizQ = shuffle([...quizPool]); if (isMastery) masteryQueue = [...quizQ];
+  quizQ = shuffle([...quizPool]); masteryQueue = isMastery ? [...quizQ] : [];
   show('screen-quiz'); renderQ();
 }
-function goHome() { hide('screen-results'); show('screen-home'); }
+function goHome() { hide('screen-results'); show('screen-home'); renderResume(); }
+
+/* ── Keyboard shortcuts: 1-5 pick the choice in that position ── */
+document.addEventListener('keydown', e => {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if ($('screen-quiz').classList.contains('hidden')) return;
+  if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+  const n = parseInt(e.key, 10);
+  if (n >= 1 && n <= 5) {
+    const btn = document.querySelectorAll('.choice-btn')[n - 1];
+    if (btn && !btn.disabled) { e.preventDefault(); btn.click(); }
+  }
+});
 
 /* ── Init ── */
 initVault();
 </script>
 </body>
 </html>
+
